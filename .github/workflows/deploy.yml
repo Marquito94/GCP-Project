@@ -33,12 +33,12 @@ jobs:
 
       - name: Sync files to GCS
         run: |
-          # ensure a dedicated site folder in your repo
-          # rsync from ./site only
-          gsutil -m rsync -r -d -x '(^\.|^\.git/|^\.github/|README\.md$|.*\.json$)' ./site "gs://${BUCKET}"
-          gsutil -m setmeta -h "Cache-Control:no-store" "gs://${BUCKET}/**/*.html" || true
-          gsutil -m setmeta -h "Cache-Control:public,max-age=3600" "gs://${BUCKET}/**/*.{css,js,png,jpg,jpeg,svg,webp,ico,json}" || true
-
+          SRC="."
+          gsutil -m rsync -r -d -x '(^\.git/|^\.github/|^infra/|^\.terraform/|.*\.tf$|README\.md$|.*\.json$)' "$SRC" "gs://${BUCKET}"
+          gsutil -m setmeta -r -h "Cache-Control:no-store"  "gs://${BUCKET}/*.html" "gs://${BUCKET}/**.html" || true
+          gsutil -m setmeta -r -h "Cache-Control:public,max-age=3600" \
+            "gs://${BUCKET}/**.css" "gs://${BUCKET}/**.js" "gs://${BUCKET}/**.png" "gs://${BUCKET}/**.jpg" \
+            "gs://${BUCKET}/**.jpeg" "gs://${BUCKET}/**.svg" "gs://${BUCKET}/**.webp" "gs://${BUCKET}/**.ico" "gs://${BUCKET}/**.json" || true
 
       - name: Show website URL
         run: |
