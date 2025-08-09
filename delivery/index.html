@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>/delivery</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="data:," />
+</head>
+<body style="font-family: system-ui, Arial; margin: 40px;">
+  <h1>/delivery</h1>
+  <p>Calling backend: <code>GET /delivery/info</code></p>
+
+  <pre id="output">Loading…</pre>
+
+  <script src="/js/api.js"></script>
+  <script>
+    (async () => {
+      const data = await callApi("/delivery/info");
+      document.getElementById("output").textContent = JSON.stringify(data, null, 2);
+    })();
+  </script>
+
+  <p><a href="/">← back</a></p>
+</body>
+</html>
