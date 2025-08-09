@@ -33,9 +33,12 @@ jobs:
 
       - name: Sync files to GCS
         run: |
-          gsutil -m rsync -r -d ./ "gs://${BUCKET}"
+          # ensure a dedicated site folder in your repo
+          # rsync from ./site only
+          gsutil -m rsync -r -d -x '(^\.|^\.git/|^\.github/|README\.md$|.*\.json$)' ./site "gs://${BUCKET}"
           gsutil -m setmeta -h "Cache-Control:no-store" "gs://${BUCKET}/**/*.html" || true
           gsutil -m setmeta -h "Cache-Control:public,max-age=3600" "gs://${BUCKET}/**/*.{css,js,png,jpg,jpeg,svg,webp,ico,json}" || true
+
 
       - name: Show website URL
         run: |
