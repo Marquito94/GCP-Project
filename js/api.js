@@ -1,6 +1,6 @@
 // js/api.js
 // Where your API lives right now (GKE Ingress host):
-const BACKEND_BASE_URL = "https://backend.apipueba-web-dev.com"; // change to Apigee later if you want
+const BACKEND_BASE_URL = "https://api.pueba-web-dev.com"; // change to Apigee later if you want
 
 function joinUrl(base, path) {
   const p = path.startsWith("/") ? path : `/${path}`;
