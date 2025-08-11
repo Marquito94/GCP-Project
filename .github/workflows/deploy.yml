@@ -74,4 +74,5 @@ jobs:
           if [ -n "$ASSETS" ]; then gsutil -m setmeta -r -h "Cache-Control:public,max-age=3600" $ASSETS; fi
 
       - name: Done
-        run: echo "Site: https://pueba-web-dev.com"
+        run: |
+          echo "Site: https://pueba-web-dev.com"
