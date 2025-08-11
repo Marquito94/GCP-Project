@@ -5,8 +5,13 @@
   <title>Static Site – Home</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" href="data:," />
+  <style>
+    body { font-family: system-ui, Arial; margin: 40px; }
+    pre { background: #f7f7f7; padding: 12px; border-radius: 8px; }
+    a { cursor: pointer; color: blue; text-decoration: underline; }
+  </style>
 </head>
-<body style="font-family: system-ui, Arial; margin: 40px;">
+<body>
   <h1>Welcome 👋</h1>
   <p>Three example paths that call a backend:</p>
   <ul>
@@ -14,40 +19,71 @@
     <li><a href="/delivery/">/delivery</a></li>
     <li><a href="/status/">/status</a></li>
   </ul>
-  <p>Each page will call <code>https://api.example.com</code> with a different path.</p>
+  <p>Each will call <code>https://api.pueba-web-dev.com</code> with authentication.</p>
+
+  <h3>Response:</h3>
+  <pre id="out">Click a link above to test the API.</pre>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+
+    // 1. Load runtime config from GCS
+    const cfg = await fetch("/config.json", { cache: "no-store" }).then(r => r.json());
+
+    // 2. Init Firebase
+    const app = initializeApp({
+      apiKey: cfg.apiKey,
+      authDomain: cfg.authDomain,
+      projectId: cfg.projectId
+    });
+
+    // 3. Auth setup
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
+
+    async function ensureSignedIn() {
+      if (!auth.currentUser) {
+        await signInWithPopup(auth, provider);
+      }
+    }
+
+    // 4. Authenticated fetch
+    async function authFetch(path, options = {}) {
+      await ensureSignedIn();
+      const idToken = await auth.currentUser.getIdToken();
+      const res = await fetch(`https://api.pueba-web-dev.com${path}`, {
+        ...options,
+        headers: { 
+          Accept: "application/json", 
+          Authorization: `Bearer ${idToken}`, 
+          ...(options.headers || {}) 
+        },
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    }
+
+    // 5. Bind links to API calls
+    const out = document.getElementById("out");
+    function bindLink(href, path) {
+      const a = document.querySelector(`a[href="${href}"]`);
+      a.addEventListener("click", async (e) => {
+        e.preventDefault();
+        out.textContent = "Loading…";
+        try {
+          const data = await authFetch(path);
+          out.textContent = JSON.stringify(data, null, 2);
+        } catch (err) {
+          out.textContent = `Error: ${err.message}`;
+        }
+      });
+    }
+
+    bindLink("/solutions/", "/solutions/ping");
+    bindLink("/delivery/", "/delivery/info");
+    bindLink("/status/", "/status/health");
+  </script>
 </body>
 </html>
-
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-  import { getAuth, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-
-  // Fetch runtime config (no cache)
-  const cfg = await fetch("/config.json", { cache: "no-store" }).then(r => r.json());
-
-  const app = initializeApp({
-    apiKey: cfg.apiKey,
-    authDomain: cfg.authDomain,
-    projectId: cfg.projectId
-  });
-
-  const auth = getAuth(app);
-  const provider = new GoogleAuthProvider();
-
-  async function ensureSignedIn() {
-    if (!auth.currentUser) await signInWithPopup(auth, provider);
-  }
-
-  // Use this instead of fetch()
-  window.authFetch = async (path, options = {}) => {
-    await ensureSignedIn();
-    const idToken = await auth.currentUser.getIdToken();
-    const res = await fetch(`https://api.pueba-web-dev.com${path}`, {
-      ...options,
-      headers: { Accept: "application/json", Authorization: `Bearer ${idToken}`, ...(options.headers || {}) },
-      credentials: "include",
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  };
-</script>
