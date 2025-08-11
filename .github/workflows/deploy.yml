@@ -26,20 +26,33 @@ jobs:
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
-
+  
       - name: Ensure website config
         run: |
           gsutil web set -m "${MAIN_PAGE}" -e "${ERROR_PAGE}" "gs://${BUCKET}"
+          
+      - name: Generate runtime config
+        run: |
+          cat > config.json <<'JSON'
+          {
+            "apiKey": "${{ secrets.FIREBASE_API_KEY }}",
+            "authDomain": "app-dev-468521.firebaseapp.com",
+            "projectId": "${{ secrets.FIREBASE_PROJECT_ID }}"
+          }
+          JSON
+          gsutil cp -h "Cache-Control:no-store" config.json "gs://${BUCKET}/config.json"
 
       - name: Sync files to GCS
         run: |
           SRC="."
-          gsutil -m rsync -r -d -x '(^\.git/|^\.github/|^infra/|^\.terraform/|.*\.tf$|README\.md$|.*\.json$)' "$SRC" "gs://${BUCKET}"
-          gsutil -m setmeta -r -h "Cache-Control:no-store"  "gs://${BUCKET}/*.html" "gs://${BUCKET}/**.html" || true
-          gsutil -m setmeta -r -h "Cache-Control:public,max-age=3600" \
-            "gs://${BUCKET}/**.css" "gs://${BUCKET}/**.js" "gs://${BUCKET}/**.png" "gs://${BUCKET}/**.jpg" \
-            "gs://${BUCKET}/**.jpeg" "gs://${BUCKET}/**.svg" "gs://${BUCKET}/**.webp" "gs://${BUCKET}/**.ico" "gs://${BUCKET}/**.json" || true
+          # don't rsync config.json (we already uploaded it with no-store)
+          gsutil -m rsync -r -d -x '(^\.git/|^\.github/|^infra/|^\.terraform/|.*\.tf$|README\.md$|(^|/)config\.json$)' "$SRC" "gs://${BUCKET}"
 
-      - name: Show website URL
-        run: |
-          echo "Deployed to: http://storage.googleapis.com/${BUCKET}/index.html"
+          # HTML: no-store (good for quick updates)
+          gsutil -m setmeta -h "Cache-Control:no-store"  "gs://${BUCKET}/*.html" || true
+          gsutil -m setmeta -r -h "Cache-Control:no-store" "gs://${BUCKET}/**.html" || true
+
+          # Static assets: cache
+          # IMPORTANT: exclude config.json so we don't overwrite its no-store header
+          gsutil -m setmeta -r -h "Cache-Control:public,max-age=3600" \
+            $(gsutil ls "gs://${BUCKET}/**" | grep -E '\.(css|js|png|jpg|jpeg|svg|webp|ico)$') || true
