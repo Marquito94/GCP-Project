@@ -17,3 +17,37 @@
   <p>Each page will call <code>https://api.example.com</code> with a different path.</p>
 </body>
 </html>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+
+  // Fetch runtime config (no cache)
+  const cfg = await fetch("/config.json", { cache: "no-store" }).then(r => r.json());
+
+  const app = initializeApp({
+    apiKey: cfg.apiKey,
+    authDomain: cfg.authDomain,
+    projectId: cfg.projectId
+  });
+
+  const auth = getAuth(app);
+  const provider = new GoogleAuthProvider();
+
+  async function ensureSignedIn() {
+    if (!auth.currentUser) await signInWithPopup(auth, provider);
+  }
+
+  // Use this instead of fetch()
+  window.authFetch = async (path, options = {}) => {
+    await ensureSignedIn();
+    const idToken = await auth.currentUser.getIdToken();
+    const res = await fetch(`https://api.pueba-web-dev.com${path}`, {
+      ...options,
+      headers: { Accept: "application/json", Authorization: `Bearer ${idToken}`, ...(options.headers || {}) },
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  };
+</script>
