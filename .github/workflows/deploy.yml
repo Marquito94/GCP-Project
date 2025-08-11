@@ -29,27 +29,27 @@ jobs:
       - name: Ensure website config (main/error pages)
         run: |
           gsutil web set -m "${MAIN_PAGE}" -e "${ERROR_PAGE}" "gs://${BUCKET}"
-
+          
       - name: Generate deploy-time JWT
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}   # same value you stored in Apigee KVM private.jwt_secret
+          AUDIENCE:  ${{ secrets.AUDIENCE }}      # e.g. frontend-static
+          ISSUER:    ${{ secrets.ISSUER }}        # e.g. pueba-web-dev.com
         run: |
           npm init -y >/dev/null 2>&1
           npm i jsonwebtoken >/dev/null 2>&1
           TOKEN=$(node - <<'NODE'
           const jwt = require('jsonwebtoken');
-          // MUST match Apigee VerifyJWT policy values below
-          const payload = { aud: "process.env.AUDIENCE", iss: "process.env.ISSUER" };
-          const token = jwt.sign(payload, process.env.JWT_SECRET, {
-            algorithm: "HS256",
-            expiresIn: "1h",
-          });
+          const { AUDIENCE, ISSUER, JWT_SECRET } = process.env;
+          if (!AUDIENCE || !ISSUER || !JWT_SECRET) {
+            throw new Error('AUDIENCE/ISSUER/JWT_SECRET not set');
+          }
+          const payload = { aud: AUDIENCE, iss: ISSUER };
+          const token = jwt.sign(payload, JWT_SECRET, { algorithm: "HS256", expiresIn: "1h" });
           console.log(token);
           NODE
           )
-          echo "JWT=$TOKEN" >> $GITHUB_ENV
-        env:
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          AUDIENCE: ${{ secrets.AUDIENCE }}
-          ISSUER: ${{ secrets.ISSUER }}
+          echo "JWT=$TOKEN" >> "$GITHUB_ENV"
 
       - name: Create runtime config.json (no-store)
         run: |
