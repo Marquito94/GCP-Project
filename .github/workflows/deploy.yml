@@ -14,7 +14,6 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,33 +25,53 @@ jobs:
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
-  
-      - name: Ensure website config
+
+      - name: Ensure website config (main/error pages)
         run: |
           gsutil web set -m "${MAIN_PAGE}" -e "${ERROR_PAGE}" "gs://${BUCKET}"
-          
-      - name: Generate runtime config
+
+      - name: Generate deploy-time JWT
         run: |
-          cat > config.json <<'JSON'
+          npm init -y >/dev/null 2>&1
+          npm i jsonwebtoken >/dev/null 2>&1
+          TOKEN=$(node - <<'NODE'
+          const jwt = require('jsonwebtoken');
+          // MUST match Apigee VerifyJWT policy values below
+          const payload = { aud: "process.env.AUDIENCE", iss: "process.env.ISSUER" };
+          const token = jwt.sign(payload, process.env.JWT_SECRET, {
+            algorithm: "HS256",
+            expiresIn: "1h",
+          });
+          console.log(token);
+          NODE
+          )
+          echo "JWT=$TOKEN" >> $GITHUB_ENV
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          AUDIENCE: ${{ secrets.AUDIENCE }}
+          ISSUER: ${{ secrets.ISSUER }}
+
+      - name: Create runtime config.json (no-store)
+        run: |
+          cat > config.json <<JSON
           {
-            "apiKey": "${{ secrets.FIREBASE_API_KEY }}",
-            "authDomain": "app-dev-468521.firebaseapp.com",
-            "projectId": "${{ secrets.FIREBASE_PROJECT_ID }}"
+            "jwt": "${JWT}"
           }
           JSON
           gsutil -h "Cache-Control:no-store" cp config.json "gs://${BUCKET}/config.json"
 
-      - name: Sync files to GCS
+      - name: Sync files to GCS (exclude config.json so it keeps no-store)
         run: |
           SRC="."
-          # don't rsync config.json (we already uploaded it with no-store)
           gsutil -m rsync -r -d -x '(^\.git/|^\.github/|^infra/|^\.terraform/|.*\.tf$|README\.md$|(^|/)config\.json$)' "$SRC" "gs://${BUCKET}"
 
-          # HTML: no-store (good for quick updates)
+          # HTML: no-store for quick iteration
           gsutil -m setmeta -h "Cache-Control:no-store"  "gs://${BUCKET}/*.html" || true
           gsutil -m setmeta -r -h "Cache-Control:no-store" "gs://${BUCKET}/**.html" || true
 
-          # Static assets: cache
-          # IMPORTANT: exclude config.json so we don't overwrite its no-store header
-          gsutil -m setmeta -r -h "Cache-Control:public,max-age=3600" \
-            $(gsutil ls "gs://${BUCKET}/**" | grep -E '\.(css|js|png|jpg|jpeg|svg|webp|ico)$') || true
+          # Static assets: cache (leave *.json alone)
+          ASSETS=$(gsutil ls "gs://${BUCKET}/**" | grep -E '\.(css|js|png|jpg|jpeg|svg|webp|ico)$' || true)
+          if [ -n "$ASSETS" ]; then gsutil -m setmeta -r -h "Cache-Control:public,max-age=3600" $ASSETS; fi
+
+      - name: Done
+        run: echo "Site: https://pueba-web-dev.com"
