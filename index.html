@@ -7,83 +7,59 @@
   <link rel="icon" href="data:," />
   <style>
     body { font-family: system-ui, Arial; margin: 40px; }
-    pre { background: #f7f7f7; padding: 12px; border-radius: 8px; }
-    a { cursor: pointer; color: blue; text-decoration: underline; }
+    pre { background:#f7f7f7; padding:12px; border-radius:8px; }
+    a { display:inline-block; margin:4px 0; }
+    .muted { color:#666; }
   </style>
 </head>
 <body>
   <h1>Welcome 👋</h1>
-  <p>Three example paths that call a backend:</p>
+  <p>Three example paths that call the backend via Apigee:</p>
   <ul>
     <li><a href="/solutions/">/solutions</a></li>
     <li><a href="/delivery/">/delivery</a></li>
     <li><a href="/status/">/status</a></li>
   </ul>
-  <p>Each will call <code>https://api.pueba-web-dev.com</code> with authentication.</p>
+  <p class="muted">Requests go to <code>https://api.pueba-web-dev.com</code> with a deploy-time JWT.</p>
 
-  <h3>Response:</h3>
-  <pre id="out">Click a link above to test the API.</pre>
+  <h3>Response</h3>
+  <pre id="out">Click a link above…</pre>
 
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-    import { getAuth, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+    const API = "https://api.pueba-web-dev.com";
+    const out = document.getElementById("out");
 
-    // 1. Load runtime config from GCS
+    // Load the short-lived JWT created at deploy time
     const cfg = await fetch("/config.json", { cache: "no-store" }).then(r => r.json());
 
-    // 2. Init Firebase
-    const app = initializeApp({
-      apiKey: cfg.apiKey,
-      authDomain: cfg.authDomain,
-      projectId: cfg.projectId
-    });
-
-    // 3. Auth setup
-    const auth = getAuth(app);
-    const provider = new GoogleAuthProvider();
-
-    async function ensureSignedIn() {
-      if (!auth.currentUser) {
-        await signInWithPopup(auth, provider);
+    async function call(path) {
+      out.textContent = "Loading…";
+      try {
+        const res = await fetch(API + path, {
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${cfg.jwt}`
+          },
+          credentials: "include"
+        });
+        const text = await res.text();
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${text}`);
+        try { out.textContent = JSON.stringify(JSON.parse(text), null, 2); }
+        catch { out.textContent = text; }
+      } catch (e) {
+        out.textContent = e.message || String(e);
       }
     }
 
-    // 4. Authenticated fetch
-    async function authFetch(path, options = {}) {
-      await ensureSignedIn();
-      const idToken = await auth.currentUser.getIdToken();
-      const res = await fetch(`https://api.pueba-web-dev.com${path}`, {
-        ...options,
-        headers: { 
-          Accept: "application/json", 
-          Authorization: `Bearer ${idToken}`, 
-          ...(options.headers || {}) 
-        },
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json();
-    }
-
-    // 5. Bind links to API calls
-    const out = document.getElementById("out");
-    function bindLink(href, path) {
+    function wire(href, apiPath) {
       const a = document.querySelector(`a[href="${href}"]`);
-      a.addEventListener("click", async (e) => {
-        e.preventDefault();
-        out.textContent = "Loading…";
-        try {
-          const data = await authFetch(path);
-          out.textContent = JSON.stringify(data, null, 2);
-        } catch (err) {
-          out.textContent = `Error: ${err.message}`;
-        }
-      });
+      if (!a) return;
+      a.addEventListener("click", e => { e.preventDefault(); call(apiPath); });
     }
 
-    bindLink("/solutions/", "/solutions/ping");
-    bindLink("/delivery/", "/delivery/info");
-    bindLink("/status/", "/status/health");
+    wire("/solutions/", "/solutions/ping");
+    wire("/delivery/", "/delivery/info");
+    wire("/status/", "/status/health");
   </script>
 </body>
 </html>
