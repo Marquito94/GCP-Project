@@ -40,7 +40,7 @@ jobs:
             "projectId": "${{ secrets.FIREBASE_PROJECT_ID }}"
           }
           JSON
-          gsutil cp -h "Cache-Control:no-store" config.json "gs://${BUCKET}/config.json"
+          gsutil -h "Cache-Control:no-store" cp config.json "gs://${BUCKET}/config.json"
 
       - name: Sync files to GCS
         run: |
