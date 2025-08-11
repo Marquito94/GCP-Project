@@ -40,7 +40,6 @@
             Accept: "application/json",
             Authorization: `Bearer ${cfg.jwt}`
           },
-          credentials: "include"
         });
         const text = await res.text();
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${text}`);
